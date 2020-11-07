@@ -7,6 +7,7 @@ import datetime
 import ccxt
 import pytz
 import plotly.graph_objects as go
+import numpy as np
 
 BINANCE = ccxt.binance()
 datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
@@ -54,6 +55,7 @@ def plot_ohlc_binance(df, title=''):
 
 
 def before_after_chart_for_okex(func):
+    # use this re if you want show results of anomaly_analysis_and_smoothing
     def wrapper(df):
         fig1 = go.Figure(data=go.Ohlc(x=df.index,
                                       open=df['Open_okex'],
@@ -62,7 +64,6 @@ def before_after_chart_for_okex(func):
                                       close=df['Close_okex']))
         fig1.update_layout(title='before')
         fig1.show()
-        func(df)
         df = func(df)
         fig1 = go.Figure(data=go.Ohlc(x=df.index,
                                       open=df['Open_okex'],
@@ -71,15 +72,22 @@ def before_after_chart_for_okex(func):
                                       close=df['Close_okex']))
         fig1.update_layout(title='after')
         fig1.show()
+        fig2 = go.Figure(data=go.Ohlc(x=df.index,
+                                      open=df['Open_binance'],
+                                      high=df['Hight_binance'],
+                                      low=df['Low_binance'],
+                                      close=df['Close_binance']))
+        fig2.update_layout(title='binance')
+        fig2.show()
 
     return wrapper
 
 
 @before_after_chart_for_okex
-def anomaly_analysis_z(df_res):
+def anomaly_analysis_and_smoothing(df_res):
+    #
     ohlc_cols = [['Open_binance', 'Hight_binance', 'Low_binance', 'Close_binance'],
                  ['Open_okex', 'Hight_okex', 'Low_okex', 'Close_okex']]
-    # plot_ohlc_okex(df_res, 'Okex_' + str(n))
     for i in range(4):
         df_res[ohlc_cols[0][i] + '_dev'] = 2 * abs(df_res[ohlc_cols[0][i]] - df_res[ohlc_cols[1][i]]) / (
                 df_res[ohlc_cols[0][i]] + df_res[ohlc_cols[1][i]])
@@ -90,20 +98,21 @@ def anomaly_analysis_z(df_res):
                 df_res[ohlc_cols[1][i]] + df_res[ohlc_cols[0][i]])
         df_res[ohlc_cols[1][i] + '_Z_dev'] = (df_res[ohlc_cols[1][i] + '_dev'] - df_res[
             ohlc_cols[1][i] + '_dev'].mean()) / df_res[ohlc_cols[1][i] + '_dev'].std()
+    # just replace the open of the current candle with the close of the previous one and vice versa for close
     df_res.loc[abs(df_res['Open_okex_Z_dev']) > 7.5, ['Open_okex']] = df_res['Close_okex'].shift(1)
     df_res.loc[abs(df_res['Close_okex_Z_dev']) > 7.5, ['Close_okex']] = df_res['Open_okex'].shift(-1)
-    df_res.loc[abs(df_res['Hight_okex_Z_dev']) > 7.5, ['Hight_okex']] = \
-        (df_res['Hight_binance'] + df_res['Hight_okex']) / 2
-    df_res.loc[abs(df_res['Low_okex_Z_dev']) > 7.5, ['Low_okex']] = \
-        (df_res['Low_binance'] + df_res['Low_okex']) / 2
+    # replace the extremum of okex if r> 7.5 and if it is greater (less) than the extremum of binance
+    df_res.loc[(abs(df_res['Hight_okex_Z_dev']) > 7.5) & (df_res['Hight_okex'] > df_res['Hight_binance']),
+               ['Hight_okex']] = df_res['Hight_binance']
+    df_res.loc[(abs(df_res['Low_okex_Z_dev']) > 7.5) & (df_res['Low_okex'] < df_res['Low_binance']),
+               ['Low_okex']] = df_res['Low_binance']
     pd.options.display.float_format = '{:.8f}'.format
     df_res = df_res.round(8)
-    print(df_res)
-    plot_ohlc_binance(df_res, 'Binance')
     return df_res
 
 
 def get_ohlc_data_from_okex(ticker):
+    # returns a DataFrame with data on all daily candlesticks of a trading pair on Okex
     timeframe = 86400
     end = datetime.datetime.combine(datetime.datetime.today(), datetime.datetime.min.time())
     start = end - datetime.timedelta(days=200)
@@ -119,7 +128,6 @@ def get_ohlc_data_from_okex(ticker):
         start = end - datetime.timedelta(days=200)
         if len(df) < 200:
             break
-
     df_ret.rename(columns={0: 'DateTime', 1: 'Open', 2: 'Hight', 3: 'Low', 4: 'Close', 5: 'Volume'},
                   inplace=True)
     df_ret.sort_values(by='DateTime', ascending=True, inplace=True)
@@ -161,6 +169,7 @@ def get_ohlc_data_from_binance(ticker):
 
 
 def merge_candles_from_random_tickers(tickers, count):
+    # returns DataFrame with merged candlestick data for each pair
     tickers_okex = tickers[0]
     tickers_binance = tickers[1]
     for i in range(count):
@@ -261,7 +270,7 @@ if __name__ == '__main__':
     #     get_market_trades_okex(elem).to_csv(elem + '_okex_market_trades.csv', sep=';')
     # for elem in tickers[1]:
     #     get_market_trades_binance(elem).to_csv(str(elem).replace('/', '') + '_binance_market_trades.csv', sep=';')
-    anomaly_analysis_z(
+    anomaly_analysis_and_smoothing(
         merge_candles_from_random_tickers(
             get_random_3(
                 get_symbols_table()), 1))
