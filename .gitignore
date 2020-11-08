@@ -126,3 +126,6 @@ dmypy.json
 
 # foldrs
 /csv_files/
+
+#csv
+*.csv

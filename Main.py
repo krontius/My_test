@@ -7,7 +7,6 @@ import datetime
 import ccxt
 import pytz
 import plotly.graph_objects as go
-import numpy as np
 
 BINANCE = ccxt.binance()
 datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
@@ -26,8 +25,10 @@ def get_symbols_table():
     df_symbols = pd.merge(left=df_binance_tickers_ccxt, right=df_okex_tickers, left_on='symbol',
                           right_on='okex')
     df_symbols.rename(
-        columns={0: 'binance_name', 'symbol': 'binance_key', 'instrument_id': 'okex_name', 'okex': 'okex_key'},
+        columns={0: 'binance_name', 'symbol': 'key_name', 'instrument_id': 'okex_name'},
         inplace=True)
+    df_symbols.drop(['okex'], axis='columns', inplace=True)
+
     return df_symbols
 
 
@@ -55,7 +56,7 @@ def plot_ohlc_binance(df, title=''):
 
 
 def before_after_chart_for_okex(func):
-    # use this re if you want show results of anomaly_analysis_and_smoothing
+    # use this if you wants to show charts of anomaly_analysis_and_smoothing
     def wrapper(df):
         fig1 = go.Figure(data=go.Ohlc(x=df.index,
                                       open=df['Open_okex'],
@@ -83,9 +84,9 @@ def before_after_chart_for_okex(func):
     return wrapper
 
 
-@before_after_chart_for_okex
+# @before_after_chart_for_okex
 def anomaly_analysis_and_smoothing(df_res):
-    #
+    # z test for each value of variance and smoothing
     ohlc_cols = [['Open_binance', 'Hight_binance', 'Low_binance', 'Close_binance'],
                  ['Open_okex', 'Hight_okex', 'Low_okex', 'Close_okex']]
     for i in range(4):
@@ -107,7 +108,12 @@ def anomaly_analysis_and_smoothing(df_res):
     df_res.loc[(abs(df_res['Low_okex_Z_dev']) > 7.5) & (df_res['Low_okex'] < df_res['Low_binance']),
                ['Low_okex']] = df_res['Low_binance']
     pd.options.display.float_format = '{:.8f}'.format
+    # delete the first 3 rows because they always contains the worst data for model
+    df_res = df_res.iloc[3:]
     df_res = df_res.round(8)
+    df_res = df_res[[
+        'Open_binance', 'Hight_binance', 'Low_binance', 'Close_binance', 'Volume_binance',
+        'Open_okex', 'Hight_okex', 'Low_okex', 'Close_okex', 'Volume_okex']]
     return df_res
 
 
@@ -168,26 +174,22 @@ def get_ohlc_data_from_binance(ticker):
     return df_ret
 
 
-def merge_candles_from_random_tickers(tickers, count):
+def merge_candles_from_random_tickers(tickers):
     # returns DataFrame with merged candlestick data for each pair
-    tickers_okex = tickers[0]
-    tickers_binance = tickers[1]
-    for i in range(count):
-        print(tickers_binance[i])
-        df_binance = get_ohlc_data_from_binance(tickers_binance[i])
-        df_okex = get_ohlc_data_from_okex(tickers_okex[i])
-        df_result = pd.merge(df_binance, df_okex, on=['DateTime'], how='inner')
-        df_result.rename(columns={'Open_x': 'Open_binance', 'Hight_x': 'Hight_binance', 'Low_x': 'Low_binance',
-                                  'Close_x': 'Close_binance', 'Volume_x': 'Volume_binance', 'Open_y': 'Open_okex',
-                                  'Hight_y': 'Hight_okex', 'Low_y': 'Low_okex', 'Close_y': 'Close_okex',
-                                  'Volume_y': 'Volume_okex'},
-                         inplace=True)
-        df_result = df_result.apply(pd.to_numeric, errors='ignore')
-        pd.options.display.float_format = '{:.8f}'.format
-        df_result = df_result.round(8)
-        # delete the first 3 rows because they always contains the worst data for model
-        df_result = df_result.iloc[3:]
-        df_result.rename = tickers_okex[i] + '_ohlc'
+    ticker_okex = tickers[0]
+    ticker_binance = tickers[1]
+    df_binance = get_ohlc_data_from_binance(ticker_binance)
+    df_okex = get_ohlc_data_from_okex(ticker_okex)
+    df_result = pd.merge(df_binance, df_okex, on=['DateTime'], how='inner')
+    df_result.rename(columns={'Open_x': 'Open_binance', 'Hight_x': 'Hight_binance', 'Low_x': 'Low_binance',
+                              'Close_x': 'Close_binance', 'Volume_x': 'Volume_binance', 'Open_y': 'Open_okex',
+                              'Hight_y': 'Hight_okex', 'Low_y': 'Low_okex', 'Close_y': 'Close_okex',
+                              'Volume_y': 'Volume_okex'},
+                     inplace=True)
+    df_result = df_result.apply(pd.to_numeric, errors='ignore')
+    pd.options.display.float_format = '{:.8f}'.format
+    df_result = df_result.round(8)
+    df_result.rename = ticker_okex + '_ohlc'
     return df_result
 
 
@@ -261,17 +263,17 @@ def get_market_trades_binance(ticker):
 
 if __name__ == '__main__':
     # configuration should create 10 csv files: 1 file - list of pairs, 3 files - merged candles,6 files - market trades
-    # df_symbols = get_symbols_table()
-    # df_symbols.to_csv('pairs.csv', sep=';')
-    # tickers = get_random_3(df_symbols)
-    # print(tickers)
-    # merge_candles_from_3_random_tickers(tickers)
-    # for elem in tickers[0]:
-    #     get_market_trades_okex(elem).to_csv(elem + '_okex_market_trades.csv', sep=';')
-    # for elem in tickers[1]:
-    #     get_market_trades_binance(elem).to_csv(str(elem).replace('/', '') + '_binance_market_trades.csv', sep=';')
-    anomaly_analysis_and_smoothing(
-        merge_candles_from_random_tickers(
-            get_random_3(
-                get_symbols_table()), 1))
-    # .to_csv('test.csv', sep=';')
+    df_symbols = get_symbols_table()
+    df_symbols.to_csv('pairs.csv', sep=';')
+    # tickers = [df_symbols['okex_name'].tolist(), df_symbols['binance_name'].tolist()]
+    tickers = get_random_3(df_symbols)
+    print(tickers)
+    for i in range(len(tickers[0])):
+        print([tickers[0][i], tickers[1][i]])
+        df_merged = merge_candles_from_random_tickers([tickers[0][i], tickers[1][i]])
+        df_merged = anomaly_analysis_and_smoothing(df_merged)
+        df_merged.to_csv(str(tickers[0][i]) + '.csv', sep=';')
+    for elem in tickers[0]:
+        get_market_trades_okex(elem).to_csv(str(elem) + '_okex_market_trades.csv', sep=';')
+    for elem in tickers[1]:
+        get_market_trades_binance(elem).to_csv(str(elem).replace('/', '') + '_binance_market_trades.csv', sep=';')
