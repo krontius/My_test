@@ -1,4 +1,4 @@
-# !/user/bin/python3
+#!/usr/bin/python3
 import pandas as pd
 import requests
 import json
@@ -37,7 +37,7 @@ def get_random_3(df):
     tickers_okex = []
     tickers_binance = []
     df_symbols = get_symbols_table()
-    for i in range(3):
+    while True:
         a = random.randrange(0, len(df) - 1)
         tickers_binance.append(df_symbols['binance_name'].iloc[a])
         tickers_okex.append(df_symbols['okex_name'].iloc[a])
@@ -85,7 +85,7 @@ def before_after_chart_for_okex(func):
 
 
 # @before_after_chart_for_okex
-def anomaly_analysis_and_smoothing(df_res):
+def anomaly_analysis_and_smoothing(df_res, ticker='unknown'):
     # z test for each value of variance and smoothing
     ohlc_cols = [['Open_binance', 'Hight_binance', 'Low_binance', 'Close_binance'],
                  ['Open_okex', 'Hight_okex', 'Low_okex', 'Close_okex']]
@@ -114,6 +114,14 @@ def anomaly_analysis_and_smoothing(df_res):
     df_res = df_res[[
         'Open_binance', 'Hight_binance', 'Low_binance', 'Close_binance', 'Volume_binance',
         'Open_okex', 'Hight_okex', 'Low_okex', 'Close_okex', 'Volume_okex']]
+    df_res.rename(columns={'Open_binance': 'Open_binance_' + ticker, 'Hight_binance': 'Hight_binance_' + ticker,
+                           'Low_binance': 'Low_binance_' + ticker,
+                           'Close_binance': 'Close_binance_' + ticker, 'Volume_binance': 'Volume_binance_' + ticker,
+                           'Open_okex': 'Open_okex_' + ticker,
+                           'Hight_okex': 'Hight_okex_' + ticker, 'Low_okex': 'Low_okex_' + ticker,
+                           'Close_okex': 'Close_okex_' + ticker,
+                           'Volume_okex': 'Volume_okex_' + ticker},
+                  inplace=True)
     return df_res
 
 
@@ -178,12 +186,16 @@ def merge_candles_from_random_tickers(tickers):
     # returns DataFrame with merged candlestick data for each pair
     ticker_okex = tickers[0]
     ticker_binance = tickers[1]
+    ticker_name = ticker_binance.replace('/', '')
     df_binance = get_ohlc_data_from_binance(ticker_binance)
     df_okex = get_ohlc_data_from_okex(ticker_okex)
     df_result = pd.merge(df_binance, df_okex, on=['DateTime'], how='inner')
-    df_result.rename(columns={'Open_x': 'Open_binance', 'Hight_x': 'Hight_binance', 'Low_x': 'Low_binance',
-                              'Close_x': 'Close_binance', 'Volume_x': 'Volume_binance', 'Open_y': 'Open_okex',
-                              'Hight_y': 'Hight_okex', 'Low_y': 'Low_okex', 'Close_y': 'Close_okex',
+    df_result.rename(columns={'Open_x': 'Open_binance', 'Hight_x': 'Hight_binance',
+                              'Low_x': 'Low_binance',
+                              'Close_x': 'Close_binance', 'Volume_x': 'Volume_binance',
+                              'Open_y': 'Open_okex',
+                              'Hight_y': 'Hight_okex', 'Low_y': 'Low_okex',
+                              'Close_y': 'Close_okex',
                               'Volume_y': 'Volume_okex'},
                      inplace=True)
     df_result = df_result.apply(pd.to_numeric, errors='ignore')
@@ -239,14 +251,13 @@ def get_market_trades_okex(ticker):
     df_ret = (pd.json_normalize(data))
     df_ret.rename(columns={0: 'DateTime', 1: 'trade_id', 2: 'price', 3: 'size', 4: 'side'},
                   inplace=True)
-    pd.options.display.float_format = '{:.8f}'.format
     df_ret = df_ret.round(8)
 
     return df_ret
 
 
 def get_market_trades_binance(ticker):
-    # returns a DataFrame with information about the last 500 trades on Okex
+    # returns a DataFrame with information about the last 1000 trades on Binance
     ticker = str(ticker).replace('/', '')
     url = 'https://api.binance.com/api/v3/trades?symbol=' + str(ticker)
     api = requests.get(url)
@@ -256,24 +267,38 @@ def get_market_trades_binance(ticker):
         columns={0: 'id', 1: 'price', 2: 'qty', 3: 'quoteQty', 4: 'time', 5: 'isBuyerMaker', 6: 'isBestMatch'},
         inplace=True)
     df_ret = df_ret.apply(pd.to_numeric, errors='ignore')
-    pd.options.display.float_format = '{:.8f}'.format
     df_ret = df_ret.round(8)
     return df_ret
 
 
+def merge_3_tickers(df1, df2, df3):
+    df_result = pd.merge(df1, df2, on=['DateTime'], how='inner')
+    df_result = pd.merge(df_result, df3, on=['DateTime'], how='inner')
+    return df_result
+
+
 if __name__ == '__main__':
     # configuration should create 10 csv files: 1 file - list of pairs, 3 files - merged candles,6 files - market trades
+    dfs = []
     df_symbols = get_symbols_table()
-    df_symbols.to_csv('pairs.csv', sep=';')
-    # tickers = [df_symbols['okex_name'].tolist(), df_symbols['binance_name'].tolist()]
-    tickers = get_random_3(df_symbols)
-    print(tickers)
-    for i in range(len(tickers[0])):
-        print([tickers[0][i], tickers[1][i]])
-        df_merged = merge_candles_from_random_tickers([tickers[0][i], tickers[1][i]])
-        df_merged = anomaly_analysis_and_smoothing(df_merged)
-        df_merged.to_csv(str(tickers[0][i]) + '.csv', sep=';')
-    for elem in tickers[0]:
-        get_market_trades_okex(elem).to_csv(str(elem) + '_okex_market_trades.csv', sep=';')
-    for elem in tickers[1]:
-        get_market_trades_binance(elem).to_csv(str(elem).replace('/', '') + '_binance_market_trades.csv', sep=';')
+    df_symbols.to_csv('pairs.csv', sep=',')
+    tickers = [df_symbols['okex_name'].tolist(), df_symbols['binance_name'].tolist()]
+    while True:
+        a = random.randrange(0, len(tickers[0]) - 1)
+        print('Checking a pair for data in more than a year '+str([tickers[0][a], tickers[1][a]]))
+        df_merged = merge_candles_from_random_tickers([tickers[0][a], tickers[1][a]])
+        df_merged = anomaly_analysis_and_smoothing(df_merged, tickers[0][a].replace('-', ''))
+        if len(df_merged) > 366:
+            print('Approved '+str([tickers[0][a], tickers[1][a]]))
+            dfs.append(df_merged)
+            if len(dfs) == 3:
+                df_res = merge_3_tickers(dfs[0], dfs[1], dfs[2])
+                df_res = df_res.round(8)
+                print(df_res)
+                df_res.to_csv('test.csv', sep=';', float_format='%.8f')
+                break
+
+    # for elem in tickers[0]:
+    #     get_market_trades_okex(elem).to_csv(str(elem) + '_okex_market_trades.csv', sep=';',index=False)
+    # for elem in tickers[1]:
+    #     get_market_trades_binance(elem).to_csv(str(elem).replace('/', '') + '_binance_market_trades.csv', sep=';',index=False)

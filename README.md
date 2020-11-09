@@ -1,6 +1,8 @@
 # My_test
 Script should create 10 csv files: 1 file - list of pairs, 3 files - merged candles, 6 files - market trades
 for each pair on each market.
+
+All numeric columns in the DataFrame are float64
 # Short description of functions
 * get_symbols_table(): Returns a DataFrame with pairs available for both exchanges and their names for each exchange
 * get_random_3(DataFrame): returns [list,list] with the names of 3 random pairs for each exchange1
@@ -11,7 +13,7 @@ for each pair on each market.
 * get_ohlc_data_from_binance(ticker: str): returns a DataFrame with data on all daily candlesticks of a trading pair on Binance
 * merge_candles_from_random_tickers(tickers: [list,list]): returns DataFrame with merged candlestick data for each pair
 * get_market_trades_okex(ticker): returns a DataFrame with information about the last 100 trades on Okex
-* get_market_trades_binance(ticker): returns a DataFrame with information about the last 500 trades on Okex
+* get_market_trades_binance(ticker): returns a DataFrame with information about the last 1000 trades on Binance
 # Sample output
 Below is an example of the result of the function anomaly_analysis_and_smoothing(DataFrame) for ZEC-BTC.
 
