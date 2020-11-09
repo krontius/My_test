@@ -1,8 +1,9 @@
 # My_test
-Script should create 10 csv files: 1 file - list of pairs, 3 files - merged candles, 6 files - market trades
+Script should create 8 csv files: 1 file - list of pairs, 1 file - merged candles, 6 files - market trades
 for each pair on each market.
 
-All numeric columns in the DataFrame are float64
+All numeric columns in the OHLC DataFrames are float64
+In market trades DataFrames вata processed with pandas.to_numeric
 # Short description of functions
 * get_symbols_table(): Returns a DataFrame with pairs available for both exchanges and their names for each exchange
 * get_random_3(DataFrame): returns [list,list] with the names of 3 random pairs for each exchange1

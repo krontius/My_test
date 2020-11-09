@@ -7,6 +7,7 @@ import datetime
 import ccxt
 import pytz
 import plotly.graph_objects as go
+import numpy as np
 
 BINANCE = ccxt.binance()
 datetime.datetime.utcnow().replace(tzinfo=pytz.utc)
@@ -251,6 +252,7 @@ def get_market_trades_okex(ticker):
     df_ret = (pd.json_normalize(data))
     df_ret.rename(columns={0: 'DateTime', 1: 'trade_id', 2: 'price', 3: 'size', 4: 'side'},
                   inplace=True)
+    df_ret = df_ret.apply(pd.to_numeric, errors='ignore')
     df_ret = df_ret.round(8)
 
     return df_ret
@@ -259,7 +261,7 @@ def get_market_trades_okex(ticker):
 def get_market_trades_binance(ticker):
     # returns a DataFrame with information about the last 1000 trades on Binance
     ticker = str(ticker).replace('/', '')
-    url = 'https://api.binance.com/api/v3/trades?symbol=' + str(ticker)
+    url = 'https://api.binance.com/api/v3/trades?symbol=' + str(ticker)+'&limit='+str(1000)
     api = requests.get(url)
     data = json.loads(api.text)
     df_ret = (pd.json_normalize(data))
@@ -268,6 +270,7 @@ def get_market_trades_binance(ticker):
         inplace=True)
     df_ret = df_ret.apply(pd.to_numeric, errors='ignore')
     df_ret = df_ret.round(8)
+
     return df_ret
 
 
@@ -278,27 +281,35 @@ def merge_3_tickers(df1, df2, df3):
 
 
 if __name__ == '__main__':
-    # configuration should create 10 csv files: 1 file - list of pairs, 3 files - merged candles,6 files - market trades
+    # configuration should create 8 csv files: 1 file - list of pairs, 1 file - merged candles,6 files - market trades
     dfs = []
+    tickers_for_mt = []
     df_symbols = get_symbols_table()
-    df_symbols.to_csv('pairs.csv', sep=',')
+    df_symbols.to_csv('pairs.csv', sep=',', index=False)
     tickers = [df_symbols['okex_name'].tolist(), df_symbols['binance_name'].tolist()]
     while True:
         a = random.randrange(0, len(tickers[0]) - 1)
-        print('Checking a pair for data in more than a year '+str([tickers[0][a], tickers[1][a]]))
+        print('Checking a pair for data in more than a year ' + str([tickers[0][a], tickers[1][a]]))
         df_merged = merge_candles_from_random_tickers([tickers[0][a], tickers[1][a]])
-        df_merged = anomaly_analysis_and_smoothing(df_merged, tickers[0][a].replace('-', ''))
         if len(df_merged) > 366:
-            print('Approved '+str([tickers[0][a], tickers[1][a]]))
+            print('Approved ' + str([tickers[0][a], tickers[1][a]]))
+            tickers_for_mt.append([tickers[0][a], tickers[1][a]])
+            df_merged = anomaly_analysis_and_smoothing(df_merged, tickers[0][a].replace('-', ''))
             dfs.append(df_merged)
             if len(dfs) == 3:
                 df_res = merge_3_tickers(dfs[0], dfs[1], dfs[2])
                 df_res = df_res.round(8)
-                print(df_res)
-                df_res.to_csv('test.csv', sep=';', float_format='%.8f')
+                df_res.to_csv('OHLC.csv', sep=';', float_format='%.8f')
+                print('OHLC.csv file saved')
                 break
+        else:
+            tickers[0].remove(tickers[0][a])
+            tickers[1].remove(tickers[1][a])
 
-    # for elem in tickers[0]:
-    #     get_market_trades_okex(elem).to_csv(str(elem) + '_okex_market_trades.csv', sep=';',index=False)
-    # for elem in tickers[1]:
-    #     get_market_trades_binance(elem).to_csv(str(elem).replace('/', '') + '_binance_market_trades.csv', sep=';',index=False)
+    for elem in tickers_for_mt:
+        get_market_trades_okex(elem[0]).to_csv(str(elem[0]).replace('-', '') + '_okex_market_trades.csv', sep=',',
+                                               index=False, float_format='%.8f')
+        print(str(elem[0]).replace('-', '') + '_okex_market_trades'+'.csv file saved')
+        get_market_trades_binance(elem[1]).to_csv(str(elem[1]).replace('/', '') + '_binance_market_trades.csv', sep=',',
+                                                  index=False,  float_format='%.8f')
+        print(str(elem[1]).replace('/', '') + '_binance_market_trades'+'.csv file saved')
