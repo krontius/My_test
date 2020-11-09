@@ -289,10 +289,10 @@ if __name__ == '__main__':
     tickers = [df_symbols['okex_name'].tolist(), df_symbols['binance_name'].tolist()]
     while True:
         a = random.randrange(0, len(tickers[0]) - 1)
-        print('Checking a pair for data in more than a year ' + str([tickers[0][a], tickers[1][a]]))
+        print('Checking a pair for data in more than a year ' + tickers[0][a])
         df_merged = merge_candles_from_random_tickers([tickers[0][a], tickers[1][a]])
         if len(df_merged) > 366:
-            print('Approved ' + str([tickers[0][a], tickers[1][a]]))
+            print('Approved ' + tickers[1][a])
             tickers_for_mt.append([tickers[0][a], tickers[1][a]])
             df_merged = anomaly_analysis_and_smoothing(df_merged, tickers[0][a].replace('-', ''))
             dfs.append(df_merged)
