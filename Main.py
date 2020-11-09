@@ -299,7 +299,7 @@ if __name__ == '__main__':
             if len(dfs) == 3:
                 df_res = merge_3_tickers(dfs[0], dfs[1], dfs[2])
                 df_res = df_res.round(8)
-                df_res.to_csv('OHLC.csv', sep=';', float_format='%.8f')
+                df_res.to_csv('OHLC.csv', sep=',', float_format='%.8f')
                 print('OHLC.csv file saved')
                 break
         else:
